@@ -3,6 +3,7 @@ import { Button, Card, List, Space } from 'antd';
 import useSWR from 'swr';
 import { StockOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { DATA_BUCKET_URL } from '../constants';
 
 const fetcher = (...args) => fetch(...args).then((res) => res.json());
 
@@ -18,14 +19,7 @@ const Products = () => {
         data,
         error,
         isValidating,
-      } = useSWR('http://localhost:9081/datapoints/name', fetcher);
-    // const data = [
-    //     { title: 'Product 1', price: 100 },
-    //     { title: 'Product 2', price: 200 },
-    //     { title: 'Product 3', price: 300 },
-    //     { title: 'Product 4', price: 400 },
-    //     { title: 'Product 5', price: 500 },
-    // ];
+      } = useSWR(`${DATA_BUCKET_URL}/datapoints/name`, fetcher);
     const navigate = useNavigate();
     
     return (

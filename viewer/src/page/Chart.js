@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router';
 import { Line } from '@ant-design/charts';
 import { format } from 'fecha';
 import { Button, Card, Spin } from 'antd';
+import { DATA_BUCKET_URL } from '../constants';
 
 const fetcher = (...args) => fetch(...args).then((res) => res.json());
 
@@ -16,7 +17,7 @@ const Chart = () => {
         data,
         error,
         isValidating,
-      } = useSWR(`http://localhost:9081/datapoints?name=${params.name}&start=${startTime.toISOString()}&end=${endTime.toISOString()}`, fetcher);
+      } = useSWR(`${DATA_BUCKET_URL}/datapoints?name=${params.name}&start=${startTime.toISOString()}&end=${endTime.toISOString()}`, fetcher);
     const navigate = useNavigate();
     if (error) {
         return <Card title={params.name}>Failed to load data. {error.message}</Card>;
