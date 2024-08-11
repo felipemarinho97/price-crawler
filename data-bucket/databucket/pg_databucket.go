@@ -51,8 +51,17 @@ func (p *PostgresDataBucket) GetDataPoints(name string, start time.Time, end tim
 	return dataPoints, err
 }
 
-func (p *PostgresDataBucket) ListDataPointNames() ([]string, error) {
-	var names []string
-	err := p.db.Select(&names, "SELECT DISTINCT name FROM data_points")
+func (p *PostgresDataBucket) ListDataPointNames() ([]DataPointName, error) {
+	var names []DataPointName
+	err := p.db.Select(&names, `
+	SELECT DISTINCT name, 
+		AVG(value),
+		MIN(value),
+		MAX(value)
+	FROM data_points 
+	WHERE timestamp >= NOW() - INTERVAL '90 day'
+	GROUP BY name 
+	ORDER BY AVG(value) ASC`)
+
 	return names, err
 }

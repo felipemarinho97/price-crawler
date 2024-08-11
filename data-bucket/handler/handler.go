@@ -47,6 +47,7 @@ func (h *Handler) HandleGetDatapoint(w http.ResponseWriter, r *http.Request) {
 
 	// write the response
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	json.NewEncoder(w).Encode(dataPoints)
 }
 
@@ -78,11 +79,13 @@ func (h *Handler) HandleListDatapointNames(w http.ResponseWriter, r *http.Reques
 	// get the data point names
 	names, err := h.dataBucket.ListDataPointNames()
 	if err != nil {
+		fmt.Printf("Error while getting data point names: %v\n", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	// write the response
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	json.NewEncoder(w).Encode(names)
 }
