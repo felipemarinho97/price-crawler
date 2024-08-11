@@ -2,23 +2,27 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 
+	"github.com/felipemarinho97/price-crawler-requester/cache"
 	"github.com/felipemarinho97/price-crawler-requester/cookies"
 	"github.com/felipemarinho97/price-crawler-requester/flaresolverr"
+	"github.com/felipemarinho97/price-crawler-requester/proxy"
 )
 
 type indexer struct {
+	c  cache.Cache
 	fs *flaresolverr.FlareSolverr
 	uc *cookies.UserCookie
+	px *proxy.Proxy
 }
 
-func NewIndexer(fs *flaresolverr.FlareSolverr, uc *cookies.UserCookie) *indexer {
-	return &indexer{fs: fs, uc: uc}
+func NewIndexer(c cache.Cache, fs *flaresolverr.FlareSolverr, uc *cookies.UserCookie, px *proxy.Proxy) *indexer {
+	return &indexer{fs: fs, uc: uc, px: px, c: c}
 }
 
 type Request struct {
@@ -27,36 +31,54 @@ type Request struct {
 	Method string `json:"method"`
 }
 
-func GetDocument(fs *flaresolverr.FlareSolverr, uc *cookies.UserCookie, url string) (io.ReadCloser, error) {
+func (i *indexer) getDocument(url string) (io.ReadCloser, error) {
 	var body io.ReadCloser
-	body, err := fs.Get(url)
-	if err != nil {
-		err = fmt.Errorf("failed to get body: %w", err)
-		fmt.Printf("Error: %v\n", err)
 
-		// try request with cookies
-		client := http.Client{}
-
-		fmt.Println("Trying request with cookies")
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		addUserDetails(req, uc, url)
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to do request: %w", err)
-		}
-
-		body = resp.Body
+	// check if the document is cached
+	cached, err := i.c.Get(context.Background(), url)
+	if err == nil {
+		fmt.Printf("Document %s is cached\n", url)
+		return io.NopCloser(bytes.NewBufferString(cached)), nil
 	}
+
+	body, err = i.fs.Get(url)
+	if err != nil {
+		// try request with cookies
+		fmt.Printf("Trying request %s with cookies\n", url)
+
+		body, err = i.uc.Get(url)
+	}
+
+	if err != nil {
+		// try request with proxy
+		fmt.Printf("Trying request %s with proxy\n", url)
+
+		body, err = i.px.Get(url)
+	}
+
+	if err != nil {
+		fmt.Printf("Failed to get document: %v\n", err)
+		return nil, fmt.Errorf("failed to get document: %w", err)
+	}
+
+	// cache the document
+	doc := getAsStr(body)
+	err = i.c.Set(context.Background(), url, doc)
+	if err != nil {
+		fmt.Printf("Failed to cache document: %v\n", err)
+	}
+	body = io.NopCloser(bytes.NewBufferString(doc))
 
 	return body, nil
 }
 
-func PostDocument(fs *flaresolverr.FlareSolverr, uc *cookies.UserCookie, url string, data []byte) (io.ReadCloser, error) {
+func getAsStr(data io.ReadCloser) string {
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(data)
+	return buf.String()
+}
+
+func (i *indexer) postDocument(url string, data []byte) (io.ReadCloser, error) {
 	var body io.ReadCloser
 	// try request with cookies
 	client := http.Client{}
@@ -67,8 +89,6 @@ func PostDocument(fs *flaresolverr.FlareSolverr, uc *cookies.UserCookie, url str
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	addUserDetails(req, uc, url)
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to do request: %w", err)
@@ -77,35 +97,6 @@ func PostDocument(fs *flaresolverr.FlareSolverr, uc *cookies.UserCookie, url str
 	body = resp.Body
 
 	return body, nil
-}
-
-func addUserDetails(req *http.Request, uc *cookies.UserCookie, url string) {
-	// add headers
-	req.Header.Add("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
-	req.Header.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
-	req.Header.Add("Accept-Language", "en,pt-BR;q=0.8,pt;q=0.5,en-US;q=0.3")
-	//req.Header.Add("Accept-Encoding", "gzip, deflate, br, zstd")
-	req.Header.Add("Referer", gerReferer(url))
-	req.Header.Add("DNT", "1")
-	req.Header.Add("Connection", "keep-alive")
-	req.Header.Add("Upgrade-Insecure-Requests", "1")
-	req.Header.Add("Sec-Fetch-Dest", "document")
-	req.Header.Add("Sec-Fetch-Mode", "navigate")
-	req.Header.Add("Sec-Fetch-Site", "same-origin")
-	req.Header.Add("Sec-Fetch-User", "?1")
-	req.Header.Add("Priority", "u=0, i")
-	req.Header.Add("Pragma", "no-cache")
-	req.Header.Add("Cache-Control", "no-cache")
-	req.Header.Add("TE", "trailers")
-	uc.AddCookies(req)
-}
-
-func gerReferer(target string) string {
-	targetURL, err := url.Parse(target)
-	if err != nil {
-		return target
-	}
-	return targetURL.Scheme + "://" + targetURL.Host
 }
 
 func (i *indexer) HandleFlareSolvarr(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +111,7 @@ func (i *indexer) HandleFlareSolvarr(w http.ResponseWriter, r *http.Request) {
 	var doc io.ReadCloser
 	if req.Method == "" || req.Method == "GET" {
 		// get the document from the URL
-		doc, err = GetDocument(i.fs, i.uc, req.URL)
+		doc, err = i.getDocument(req.URL)
 		if err != nil {
 			err = fmt.Errorf("failed to get document: %w", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -129,7 +120,7 @@ func (i *indexer) HandleFlareSolvarr(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Method == "POST" {
 		// get the document from the URL
-		doc, err = PostDocument(i.fs, i.uc, req.URL, req.Data)
+		doc, err = i.postDocument(req.URL, req.Data)
 		if err != nil {
 			err = fmt.Errorf("failed to get document: %w", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
