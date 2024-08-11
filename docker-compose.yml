@@ -74,7 +74,7 @@ services:
       - WATCHER_INTERVAL="0 */4 * * *"
       - WATCHED_SEARCHES="https://www.terabyteshop.com.br/busca?str=placa+de+video+rtx+4070+super"
     ports:
-      - "9083:8080"
+      - "9083:9082"
     restart: unless-stopped
 
 networks:

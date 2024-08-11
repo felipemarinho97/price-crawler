@@ -67,6 +67,9 @@ func main() {
 		}
 	})
 
+	c.Start()
+	fmt.Println("watcher started")
+
 	// wait for signals to stop
 	select {}
 
