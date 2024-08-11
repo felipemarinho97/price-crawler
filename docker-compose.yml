@@ -1,0 +1,84 @@
+version: "3.7"
+services:
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:pr-1282
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - LOG_HTML=${LOG_HTML:-false}
+      - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+      - TZ=America/Recife
+    ports:
+      - "${PORT:-8191}:8191"
+    restart: unless-stopped
+    network_mode: host
+  
+  requester:
+    build:
+      context: requester
+      dockerfile: Dockerfile
+    container_name: price-crawler-requester
+    environment:
+      - COOKIES_FILE=/cookies.txt
+      - FLARESOLVERR_URL=http://192.168.3.9:8191
+    volumes:
+      - /home/darklyn/Projects/price-crawler/requester/cookies.txt:/cookies.txt
+    ports:
+      - "9080:9080"
+    network_mode: host
+    restart: unless-stopped
+  
+  parser:
+    build:
+      context: parser
+      dockerfile: Dockerfile
+    container_name: price-crawler-parser
+    environment:
+      - REQUESTER_URL=http://192.168.3.9:9080
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+  
+  postgres:
+    image: postgres:13
+    container_name: price-crawler-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=price_crawler
+    ports:
+      - "5434:5432"
+    volumes:
+      - price-crawler:/var/lib/postgresql/data
+    restart: unless-stopped
+  
+  data-bucket:
+    build:
+      context: data-bucket
+      dockerfile: Dockerfile
+    container_name: price-crawler-data-bucket
+    environment:
+      - POSTGRES_URL=postgres://postgres:password@price-crawler-postgres:5432/price_crawler?sslmode=disable
+    ports:
+      - "9081:8080"
+    restart: unless-stopped
+
+  watcher:
+    build:
+      context: watcher
+      dockerfile: Dockerfile
+    container_name: price-crawler-watcher
+    environment:
+      - DATA_BUCKET_URL=http://192.168.3.9:9081
+      - PARSER_URL=http://192.168.3.9:8080
+      - WATCHER_INTERVAL="0 */4 * * *"
+      - WATCHED_SEARCHES="https://www.terabyteshop.com.br/busca?str=placa+de+video+rtx+4070+super"
+    ports:
+      - "9083:8080"
+    restart: unless-stopped
+
+networks:
+  price-crawler: {}
+
+volumes:
+  price-crawler: {}
