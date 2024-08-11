@@ -58,6 +58,7 @@ func main() {
 	// create a cron job
 	c := cron.New()
 	c.AddFunc(interval, func() {
+		fmt.Println("updating prices")
 		for _, search := range wactchedSearchs {
 			fmt.Printf("updating price for search: %s\n", search)
 			err := h.UpdatePrice(search)

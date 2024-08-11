@@ -13,6 +13,13 @@ services:
     restart: unless-stopped
     network_mode: host
   
+  redis:
+    image: redis:6
+    container_name: price-crawler-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+  
   requester:
     build:
       context: requester
@@ -20,7 +27,9 @@ services:
     container_name: price-crawler-requester
     environment:
       - COOKIES_FILE=/cookies.txt
-      - FLARESOLVERR_URL=http://192.168.3.9:8191
+      - FLARESOLVERR_URL=${FLARESOLVERR_URL}
+      - PROXY_URL=${PROXY_URL}
+      - REDIS_URL=${REDIS_URL}
     volumes:
       - /home/darklyn/Projects/price-crawler/requester/cookies.txt:/cookies.txt
     ports:
@@ -34,7 +43,7 @@ services:
       dockerfile: Dockerfile
     container_name: price-crawler-parser
     environment:
-      - REQUESTER_URL=http://192.168.3.9:9080
+      - REQUESTER_URL=${REQUESTER_URL}
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -69,12 +78,23 @@ services:
       dockerfile: Dockerfile
     container_name: price-crawler-watcher
     environment:
-      - DATA_BUCKET_URL=http://192.168.3.9:9081
-      - PARSER_URL=http://192.168.3.9:8080
+      - DATA_BUCKET_URL=${DATA_BUCKET_URL}
+      - PARSER_URL=${PARSER_URL}
       - WATCHER_INTERVAL="0 */4 * * *"
       - WATCHED_SEARCHES="https://www.terabyteshop.com.br/busca?str=placa+de+video+rtx+4070+super"
     ports:
       - "9083:9082"
+    restart: unless-stopped
+  
+  viewer:
+    build:
+      context: viewer
+      dockerfile: Dockerfile
+    container_name: price-crawler-viewer
+    environment:
+      - DATA_BUCKET_URL=${DATA_BUCKET_URL}
+    ports:
+      - "9090:80"
     restart: unless-stopped
 
 networks:
