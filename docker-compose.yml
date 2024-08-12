@@ -18,6 +18,8 @@ services:
     container_name: price-crawler-redis
     ports:
       - "6379:6379"
+    networks:
+      - price-crawler
     restart: unless-stopped
   
   requester:
@@ -42,21 +44,27 @@ services:
       context: parser
       dockerfile: Dockerfile
     container_name: price-crawler-parser
+    hostname: parser
     environment:
       - REQUESTER_URL=${REQUESTER_URL}
     ports:
       - "8080:8080"
+    networks:
+      - price-crawler
     restart: unless-stopped
   
   postgres:
     image: postgres:13
     container_name: price-crawler-postgres
+    hostname: postgres
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=price_crawler
     ports:
       - "5434:5432"
+    networks:
+      - price-crawler
     volumes:
       - price-crawler:/var/lib/postgresql/data
     restart: unless-stopped
@@ -66,10 +74,13 @@ services:
       context: data-bucket
       dockerfile: Dockerfile
     container_name: price-crawler-data-bucket
+    hostname: data-bucket
     environment:
       - POSTGRES_URL=postgres://postgres:password@price-crawler-postgres:5432/price_crawler?sslmode=disable
     ports:
       - "9081:8080"
+    networks:
+      - price-crawler
     restart: unless-stopped
 
   watcher:
@@ -77,19 +88,39 @@ services:
       context: watcher
       dockerfile: Dockerfile
     container_name: price-crawler-watcher
+    hostname: watcher
     environment:
       - DATA_BUCKET_URL=${DATA_BUCKET_URL}
       - PARSER_URL=${PARSER_URL}
-      - WATCHER_INTERVAL="0 */4 * * *"
       - WATCHED_SEARCHES="https://www.terabyteshop.com.br/busca?str=placa+de+video+rtx+4070+super"
     ports:
       - "9083:9082"
+    networks:
+      - price-crawler
     restart: unless-stopped
+  
+  #### CRON JOBS ####
+  ofelia:
+    image: mcuadros/ofelia:latest
+    command: daemon --docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      ofelia.job-run.update-prices.schedule: '@every 4h'
+      ofelia.job-run.update-prices.command: "curl -X POST http://watcher:9082/update-prices -d '{\"searchLinks\":[\"https://www.terabyteshop.com.br/busca?str=placa+de+video+rtx+4070+super\"]}'"
+      ofelia.job-run.update-prices.image: curlimages/curl:latest
+      ofelia.job-run.update-prices.network: price-crawler
+    networks:
+      - price-crawler
+
+  #####################
   
   viewer:
     build:
       context: viewer
       dockerfile: Dockerfile
+      args:
+        - DATA_BUCKET_URL=${DATA_BUCKET_URL}
     container_name: price-crawler-viewer
     environment:
       - DATA_BUCKET_URL=${DATA_BUCKET_URL}
