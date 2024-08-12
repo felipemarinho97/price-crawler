@@ -11,6 +11,10 @@ RUN npm install --frozen-lockfile
 # Copy the rest of the application
 COPY . .
 
+# Inject environment variable 
+ARG DATA_BUCKET_URL
+ENV REACT_APP_DATA_BUCKET_URL=$DATA_BUCKET_URL
+
 # Build the React app
 RUN npm run build
 
