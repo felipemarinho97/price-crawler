@@ -24,6 +24,8 @@ type DataPointName struct {
 	MinValue float64 `json:"minValue" db:"min"`
 	// The maximum value of the data point.
 	MaxValue float64 `json:"maxValue" db:"max"`
+	// The last value of the data point.
+	LastValue float64 `json:"lastValue" db:"last"`
 }
 
 type DataBucket interface {

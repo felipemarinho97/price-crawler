@@ -54,14 +54,15 @@ func (p *PostgresDataBucket) GetDataPoints(name string, start time.Time, end tim
 func (p *PostgresDataBucket) ListDataPointNames() ([]DataPointName, error) {
 	var names []DataPointName
 	err := p.db.Select(&names, `
-	SELECT DISTINCT name, 
+	SELECT name, 
 		AVG(value),
 		MIN(value),
-		MAX(value)
-	FROM data_points 
+		MAX(value),
+		(SELECT value FROM data_points WHERE name = dp.name ORDER BY timestamp DESC LIMIT 1) AS last
+	FROM data_points dp
 	WHERE timestamp >= NOW() - INTERVAL '90 day'
 	GROUP BY name 
-	ORDER BY AVG(value) ASC`)
+	ORDER BY last ASC`)
 
 	return names, err
 }
