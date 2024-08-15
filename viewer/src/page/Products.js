@@ -1,9 +1,10 @@
 import React from 'react';
 import { Button, Card, List, Space } from 'antd';
 import useSWR from 'swr';
-import { StockOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
+import { DollarCircleOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { DATA_BUCKET_URL } from '../constants';
+import './Products.css';
 
 const fetcher = (...args) => fetch(...args).then((res) => res.json());
 
@@ -13,6 +14,26 @@ const IconText = ({ icon, text }) => (
       {text}
     </Space>
   );
+
+const Actions = ({ item }) => {
+    let actions = [];
+    const cheapPriceEver = item.lastValue <= item.minValue;
+    const cheapPriceNow = item.lastValue <= item.avgValue;
+    const expensivePriceNow = item.lastValue >= item.avgValue;
+    const nonVariablePrice = item.minValue === item.maxValue;
+
+    if (cheapPriceEver && cheapPriceNow && !nonVariablePrice) {
+        actions.push(<IconText icon={FallOutlined} text={<span className='cheap'>The cheapest price ever!</span>} key="cheapEverNow"/>);
+    }
+    
+    if (expensivePriceNow && !nonVariablePrice) {
+        actions.push(<IconText icon={RiseOutlined} text={<span className='expensive'>Not buy! The price is too high!</span>} key="expensiveNow"/>);
+    }
+
+    actions.push(<IconText icon={DollarCircleOutlined} text={<span className='price'>Price: R$ {item.lastValue.toFixed(2)}</span>} key="price"/>);
+
+    return actions.reduce((prev, curr) => [prev, '  ', curr]);
+}
 
 const Products = () => {
     const {
@@ -30,9 +51,7 @@ const Products = () => {
             renderItem={item => (
                 <List.Item
                     actions={[
-                        <IconText icon={StockOutlined} text={`R$ ${item.avgValue}`} key="avgValue" />,
-                        <IconText icon={FallOutlined} text={`R$ ${item.minValue}`} key="minValue" />,
-                        <IconText icon={RiseOutlined} text={`R$ ${item.maxValue}`} key="maxValue" />,
+                        <Actions item={item} />,
                         <Button type="primary" onClick={() => navigate(`/products/${item.name}`)}>
                             View
                         </Button>,

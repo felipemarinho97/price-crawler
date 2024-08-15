@@ -1,0 +1,12 @@
+.cheap {
+    color: green;
+    font-weight: bold;
+}
+
+.expensive {
+    color: red;
+    font-weight: bold;
+}
+
+.price {
+}
